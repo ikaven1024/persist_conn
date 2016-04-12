@@ -4,40 +4,43 @@ import (
     "net/http"
     "log"
     "io/ioutil"
-    "encoding/json"
-    "fmt"
+    "testing/iotest"
+    "io"
 )
 
 func watch()  {
     url := "http://127.0.0.1:8888/watch"
-    req, err := http.NewRequest("GET", url, nil)
+    resp, err := http.Get(url)
     if err != nil {
-        log.Fatalf("Fail to request %v: %v\n", url, err)
+        log.Fatalf("Fail to GET %v: %v\n", url, err)
     }
 
-    client := &http.Client{}
-    resp, err := client.Do(req)
     defer resp.Body.Close()
-    if err != nil {
-        log.Fatalf("Fail to do req: %v\n", err)
-    }
 
     if resp.StatusCode != http.StatusOK {
-        defer resp.Body.Close()
         log.Fatal("for request '%+v', got status: %v", url, resp.StatusCode)
     }
 
+    reader := iotest.OneByteReader(resp.Body)
+    buf := make([]byte, 0, 1024)
+    onebyte := make([]byte, 1)
     for {
-        bs := []byte{}
+        _, err := reader.Read(onebyte)
 
-        dec := json.NewDecoder(resp.Body)
-        if dec.Decode(bs) != nil {
-            fmt.Printf("aaa")
+        if err == io.EOF {
+            if len(buf) > 0 {
+                log.Println(string(buf))
+            }
+            log.Printf("disconnect to %v\n", resp.Request.RemoteAddr)
+            break
         }
 
-        //resp.Body.Read(bs)
-        if len(bs) > 0 {
-            log.Println(string(bs))
+        switch onebyte[0] {
+        case '\n':
+            log.Println(string(buf))
+            buf = buf[0:0]
+        default:
+            buf = append(buf, onebyte[0])
         }
     }
 }
@@ -62,4 +65,3 @@ func main() {
     //list()
     watch()
 }
-
